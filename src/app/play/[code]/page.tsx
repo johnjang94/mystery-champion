@@ -35,6 +35,7 @@ export default function PlayPage() {
   const [answerDraft, setAnswerDraft] = useState("");
   const announcedRef = useRef<Set<string>>(new Set());
   const [now, setNow] = useState(Date.now());
+  const [exitOpen, setExitOpen] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -65,6 +66,7 @@ export default function PlayPage() {
   // Voice announcements (keyed by timer.kind so they fire exactly once per transition)
   useEffect(() => {
     if (!room || !joined) return;
+    if (room.storedPhase !== "playing") return;
     const d = derivePhase(room, now);
     const key = d.timer.kind + (d.timer.kind === "bonus_reveal" ? String(d.timer.nth) : "");
     if (announcedRef.current.has(key)) return;
@@ -150,7 +152,7 @@ export default function PlayPage() {
         )}
 
         {(room.storedPhase === "playing" || room.storedPhase === "ended") && (
-          <motion.section key="game" {...fade} className="mt-2 pb-4">
+          <motion.section key="game" {...fade} className="mt-2 pb-20">
             {/* Mini timer for phones */}
             <div className="flex items-center justify-between mb-3">
               <div className="text-parchment/50 text-sm">
@@ -281,6 +283,29 @@ export default function PlayPage() {
           </motion.section>
         )}
       </AnimatePresence>
+
+      {(room.storedPhase === "playing" || room.storedPhase === "ended") && (
+        <>
+          <button
+            onClick={() => setExitOpen(true)}
+            className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 px-5 py-2 rounded-full bg-parchment/10 hover:bg-parchment/20 border border-parchment/25 text-parchment/80 text-xs uppercase tracking-widest"
+          >
+            Lobby
+          </button>
+          {exitOpen && (
+            <div className="fixed inset-0 bg-ink/80 backdrop-blur flex items-center justify-center z-[60]">
+              <div className="card max-w-sm w-[90%] text-center">
+                <div className="text-accent text-xs uppercase tracking-widest">Exit game</div>
+                <p className="mt-3 text-parchment/90">Are you sure you want to exit the game?</p>
+                <div className="mt-6 flex gap-3 justify-center">
+                  <button onClick={() => setExitOpen(false)} className="btn-pill">No</button>
+                  <Link href="/" className="btn-primary !py-2 !px-4">Yes</Link>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

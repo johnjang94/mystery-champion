@@ -55,7 +55,11 @@ export default function HostPage() {
   useEffect(() => {
     if (!room) return;
     const url = `${location.origin}/play/${room.code}`;
-    QRCode.toDataURL(url, { margin: 1, color: { dark: "#f5efe1", light: "#0b0b1000" } }).then(setQr);
+    QRCode.toDataURL(url, {
+      margin: 2,
+      width: 280,
+      color: { dark: "#0b0b10", light: "#ffffff" },
+    }).then(setQr);
   }, [room?.code]);
 
   // Voice announcements based on derived phase
@@ -398,6 +402,7 @@ function PrepStep({ done, label }: { done: boolean; label: string }) {
 function GameScreen({ room }: { room: RoomState }) {
   const s = room.scenario!;
   const [now, setNow] = useState(Date.now());
+  const [exitOpen, setExitOpen] = useState(false);
   const announcedTimerRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
@@ -533,7 +538,32 @@ function GameScreen({ room }: { room: RoomState }) {
           I have no idea, cuckoo
         </button>
       )}
+
+      <button
+        onClick={() => setExitOpen(true)}
+        className="fixed bottom-3 left-1/2 -translate-x-1/2 z-50 px-5 py-2 rounded-full bg-parchment/10 hover:bg-parchment/20 border border-parchment/25 text-parchment/80 text-xs uppercase tracking-widest"
+      >
+        Lobby
+      </button>
+
+      <ExitGameModal open={exitOpen} onClose={() => setExitOpen(false)} />
     </motion.section>
+  );
+}
+
+function ExitGameModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 bg-ink/80 backdrop-blur flex items-center justify-center z-[60]">
+      <div className="card max-w-sm w-[90%] text-center">
+        <div className="text-accent text-xs uppercase tracking-widest">Exit game</div>
+        <p className="mt-3 text-parchment/90">Are you sure you want to exit the game?</p>
+        <div className="mt-6 flex gap-3 justify-center">
+          <button onClick={onClose} className="btn-pill">No</button>
+          <Link href="/" className="btn-primary !py-2 !px-4">Yes</Link>
+        </div>
+      </div>
+    </div>
   );
 }
 

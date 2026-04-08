@@ -122,6 +122,9 @@ export async function setGenre(code: string, genre: string) {
 
 export async function setScenario(code: string, scenario: Scenario) {
   return update(code, (r) => {
+    // Flip the room into "playing" the moment the scenario is ready. The
+    // timer starts here so that the countdown begins exactly when players
+    // arrive at the game page (image generation continues in the background).
     r.scenario = scenario;
     r.storedPhase = "playing";
     r.startedAt = Date.now();
