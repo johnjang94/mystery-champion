@@ -229,13 +229,24 @@ export default function PlayPage() {
 
             <div className="mt-4 card">
               <div className="text-accent text-[10px] uppercase tracking-widest">Attempt an answer</div>
+              <div className="mt-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[11px] text-parchment/80 leading-relaxed">
+                <div className="text-accent text-[10px] uppercase tracking-widest mb-1">How to phrase it</div>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>Phrase it as a <b>question</b> (must end with “?”).</li>
+                  <li>Use <b>every revealed keyword</b> (the 4 photos + any bonus keywords).</li>
+                  <li>Tie them together into one plausible explanation.</li>
+                </ul>
+                <div className="mt-2 text-parchment/60">
+                  e.g. <i>“Did the <b>butler</b> use the <b>candlestick</b> to silence the <b>witness</b> inside the <b>library</b>?”</i>
+                </div>
+              </div>
               <textarea
                 value={answerDraft}
                 onChange={(e) => setAnswerDraft(e.target.value)}
                 disabled={!buttonsActive}
                 rows={3}
                 className="mt-2 w-full bg-parchment/10 rounded px-3 py-2 text-parchment text-sm outline-none border border-parchment/15 disabled:opacity-50"
-                placeholder="Phrase your answer as a question, using the keywords."
+                placeholder="Did the [keyword] … the [keyword] using the [keyword] in the [keyword]?"
               />
               <button
                 disabled={!buttonsActive || !answerDraft.trim()}
