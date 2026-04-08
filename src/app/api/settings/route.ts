@@ -8,9 +8,9 @@ const ALLOWED = [
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_MODEL",
   "OPENAI_API_KEY",
-  "OPENAI_IMAGE_MODEL",
   "OPENAI_TTS_MODEL",
   "OPENAI_TTS_VOICE",
+  "UNSPLASH_ACCESS_KEY",
 ];
 
 function mask(v: string) {
@@ -24,7 +24,7 @@ export async function GET() {
   const out: Record<string, { set: boolean; preview: string }> = {};
   for (const k of ALLOWED) {
     const v = all[k] || "";
-    out[k] = { set: !!v, preview: k.endsWith("_API_KEY") ? mask(v) : v };
+    out[k] = { set: !!v, preview: (k.endsWith("_API_KEY") || k.endsWith("_ACCESS_KEY")) ? mask(v) : v };
   }
   return NextResponse.json(out);
 }

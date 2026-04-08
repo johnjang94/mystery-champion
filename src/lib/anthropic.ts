@@ -8,7 +8,7 @@ async function client() {
   return new Anthropic({ apiKey });
 }
 
-const MODEL = async () => (await getKey("ANTHROPIC_MODEL")) || "claude-opus-4-6";
+const MODEL = async () => (await getKey("ANTHROPIC_MODEL")) || "claude-haiku-4-5-20251001";
 
 const SYSTEM = `You are the game master of "Mystery Champion", a deduction party game.
 You craft short, evocative mystery cases in a chosen genre. The case has:

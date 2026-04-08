@@ -50,18 +50,21 @@ export default function PlayPage() {
   }, [code]);
 
   // Subscribe (after join) for state + hints + answer results.
+  // IMPORTANT: depend on the player's team value too — when the host forms
+  // teams, the player's team flips from null → 0/1 and we need to (re)subscribe
+  // to the team channel so hints + answer results actually arrive.
+  const myPlayerId = typeof window !== "undefined" ? getPlayerId() : "";
+  const myTeamValue = room?.players.find((p) => p.id === myPlayerId)?.team ?? null;
   useEffect(() => {
     if (!joined || !room) return;
     const playerId = getPlayerId();
-    const me = room.players.find((p) => p.id === playerId);
-    const team = me?.team ?? null;
-    const subs = subscribeRoom(code, team, playerId, {
+    const subs = subscribeRoom(code, myTeamValue, playerId, {
       onState: setRoom,
       onHint: (h) => setHints((arr) => [h, ...arr].slice(0, 20)),
       onAnswerResult: (r) => setResults((arr) => [r, ...arr].slice(0, 20)),
     });
     return () => subs.unsubscribe();
-  }, [joined, code, room?.players.length, room?.mode]);
+  }, [joined, code, myTeamValue, room?.mode]);
 
   // Voice announcements (keyed by timer.kind so they fire exactly once per transition)
   useEffect(() => {

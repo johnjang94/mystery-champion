@@ -7,11 +7,11 @@ type SettingsInfo = Record<string, { set: boolean; preview: string }>;
 
 const FIELDS = [
   { key: "ANTHROPIC_API_KEY", label: "Anthropic API Key", secret: true },
-  { key: "ANTHROPIC_MODEL", label: "Anthropic Model", placeholder: "claude-opus-4-6" },
+  { key: "ANTHROPIC_MODEL", label: "Anthropic Model", placeholder: "claude-haiku-4-5-20251001" },
   { key: "OPENAI_API_KEY", label: "OpenAI API Key", secret: true },
-  { key: "OPENAI_IMAGE_MODEL", label: "OpenAI Image Model", placeholder: "gpt-image-1" },
   { key: "OPENAI_TTS_MODEL", label: "OpenAI TTS Model", placeholder: "gpt-4o-mini-tts" },
   { key: "OPENAI_TTS_VOICE", label: "OpenAI TTS Voice", placeholder: "alloy" },
+  { key: "UNSPLASH_ACCESS_KEY", label: "Unsplash Access Key", secret: true },
 ];
 
 export default function SettingsPage() {

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateImage } from "@/lib/openai";
+import { fetchUnsplashImage } from "@/lib/unsplash";
 import { getRoom, updatePhotoImage } from "@/lib/rooms";
 import { pushState } from "@/lib/pusher";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // image gen can take 20-30s
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,11 +23,14 @@ export async function POST(req: NextRequest) {
     if (!photo)
       return NextResponse.json({ error: "Photo index out of range" }, { status: 400 });
 
-    // Skip if already generated (e.g. client retried).
+    // Skip if already fetched (e.g. client retried).
     if (photo.imageUrl)
       return NextResponse.json({ imageUrl: photo.imageUrl });
 
-    const imageUrl = await generateImage(photo.prompt);
+    const imageUrl = await fetchUnsplashImage(photo.keyword);
+    if (!imageUrl)
+      return NextResponse.json({ error: "No Unsplash result for keyword" }, { status: 502 });
+
     const updated = await updatePhotoImage(upper, idx, imageUrl);
     if (updated) await pushState(upper, updated);
 
