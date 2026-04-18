@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adjustPlayerScore, adjustTeamScore, getRoom, pushActivity, findPlayer } from "@/lib/rooms";
 import { pushPlayerEvent, pushState, pushTeamEvent } from "@/lib/pusher";
-import { answerQuestion } from "@/lib/anthropic";
+import { answerQuestion } from "@/lib/openai";
 import { buttonsActive } from "@/lib/phase";
 
 export const runtime = "nodejs";

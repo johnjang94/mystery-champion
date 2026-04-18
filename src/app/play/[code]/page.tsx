@@ -136,21 +136,21 @@ export default function PlayPage() {
           </motion.section>
         )}
 
-        {room.storedPhase === "teams" && (
-          <motion.section key="teams" {...fade} className="mt-12 text-center">
+        {room.storedPhase === "genre" && (
+          <motion.section key="genre" {...fade} className="mt-12 text-center">
             <div className="text-parchment/60 text-xs uppercase tracking-widest">
-              {room.mode === "solo" ? "Solo mode" : "Your team"}
+              {room.mode === "solo" ? "Solo mode" : "Group mode"}
             </div>
             <div className="mt-2 text-4xl text-accent font-display">
               {room.mode === "solo" ? me?.name || "Player" : `Team ${myTeam == null ? "?" : myTeam + 1}`}
             </div>
-            <p className="mt-4 text-parchment/70">Wait for host to choose a genre.</p>
+            <p className="mt-4 text-parchment/70">Wait for the host to choose the game type.</p>
           </motion.section>
         )}
 
-        {room.storedPhase === "genre" && (
-          <motion.section key="genre" {...fade} className="mt-12 text-center">
-            <div className="text-parchment/70">The host is preparing the case…</div>
+        {room.storedPhase === "difficulty" && (
+          <motion.section key="difficulty" {...fade} className="mt-12 text-center">
+            <div className="text-parchment/70">The host is choosing the difficulty…</div>
           </motion.section>
         )}
 
@@ -186,9 +186,26 @@ export default function PlayPage() {
 
             {room.scenario && (
               <div className="card mt-4">
+                <div className="flex flex-wrap gap-2">
+                  {room.genre && (
+                    <span className="px-2 py-1 rounded-full bg-accent text-ink text-[10px] uppercase tracking-widest">
+                      {room.genre}
+                    </span>
+                  )}
+                  {room.difficulty && (
+                    <span className="px-2 py-1 rounded-full border border-accent/35 text-accent text-[10px] uppercase tracking-widest">
+                      {room.difficulty}
+                    </span>
+                  )}
+                </div>
                 <div className="text-accent text-[10px] uppercase tracking-widest">Briefing</div>
                 <p className="mt-1 text-parchment/90 text-sm italic">{room.scenario.briefing}</p>
                 <p className="mt-2 text-parchment/80 text-sm">{room.scenario.question}</p>
+                {room.genre === "Visual Match" && (
+                  <p className="mt-2 text-parchment/60 text-xs">
+                    Match the OpenAI-generated 3D maze scene to the labeled 2D maze board.
+                  </p>
+                )}
                 <div className="mt-3 flex flex-wrap gap-2">
                   {room.scenario.photos.map((p) => (
                     <span key={p.keyword} className="px-2 py-1 rounded bg-accent/15 border border-accent/40 text-accent text-xs">
@@ -201,6 +218,16 @@ export default function PlayPage() {
                     </span>
                   ))}
                 </div>
+                {room.scenario.choices?.length ? (
+                  <div className="mt-3 space-y-2">
+                    <div className="text-accent text-[10px] uppercase tracking-widest">Possible answers</div>
+                    {room.scenario.choices.map((choice) => (
+                      <div key={choice} className="rounded-md border border-parchment/10 bg-parchment/5 px-3 py-2 text-sm text-parchment/80">
+                        {choice}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             )}
 
@@ -233,15 +260,12 @@ export default function PlayPage() {
             <div className="mt-4 card">
               <div className="text-accent text-[10px] uppercase tracking-widest">Attempt an answer</div>
               <div className="mt-2 rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-[11px] text-parchment/80 leading-relaxed">
-                <div className="text-accent text-[10px] uppercase tracking-widest mb-1">How to phrase it</div>
+                <div className="text-accent text-[10px] uppercase tracking-widest mb-1">How to answer</div>
                 <ul className="list-disc list-inside space-y-0.5">
-                  <li>Phrase it as a <b>question</b> (must end with “?”).</li>
-                  <li>Use <b>every revealed keyword</b> (the 4 photos + any bonus keywords).</li>
-                  <li>Tie them together into one plausible explanation.</li>
+                  <li>Give your best answer using the passage, clues, and any revealed keywords.</li>
+                  <li>For number-to-letter and guess rounds, compare your answer with the choices carefully.</li>
+                  <li>For visual-match rounds, use the labeled maze to support your call.</li>
                 </ul>
-                <div className="mt-2 text-parchment/60">
-                  e.g. <i>“Did the <b>butler</b> use the <b>candlestick</b> to silence the <b>witness</b> inside the <b>library</b>?”</i>
-                </div>
               </div>
               <textarea
                 value={answerDraft}
@@ -249,7 +273,7 @@ export default function PlayPage() {
                 disabled={!buttonsActive}
                 rows={3}
                 className="mt-2 w-full bg-parchment/10 rounded px-3 py-2 text-parchment text-sm outline-none border border-parchment/15 disabled:opacity-50"
-                placeholder="Did the [keyword] … the [keyword] using the [keyword] in the [keyword]?"
+                placeholder="Type the answer you want to submit"
               />
               <button
                 disabled={!buttonsActive || !answerDraft.trim()}

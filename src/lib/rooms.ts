@@ -1,4 +1,4 @@
-import type { RoomState, Mode, Scenario, ActivityEntry, Player } from "@/types/game";
+import type { RoomState, Mode, Scenario, ActivityEntry, Player, Difficulty } from "@/types/game";
 import { kv } from "./kv";
 
 const roomKey = (code: string) => `room:${code}`;
@@ -37,6 +37,7 @@ export async function createRoom(hostId: string, hostName: string, mode: Mode): 
     players: [{ id: hostId, name: hostName || "Host", team: null, isHost: true, score: 100 }],
     storedPhase: "lobby",
     genre: null,
+    difficulty: null,
     scenario: null,
     scores: [100, 100],
     activity: [],
@@ -104,7 +105,7 @@ export async function autoTeams(code: string) {
       });
       r.players.filter((p) => p.isHost).forEach((p) => (p.team = null));
     }
-    r.storedPhase = "teams";
+    r.storedPhase = "genre";
   });
 }
 
@@ -117,6 +118,12 @@ export async function setPhase(code: string, phase: RoomState["storedPhase"]) {
 export async function setGenre(code: string, genre: string) {
   return update(code, (r) => {
     r.genre = genre;
+  });
+}
+
+export async function setDifficulty(code: string, difficulty: Difficulty) {
+  return update(code, (r) => {
+    r.difficulty = difficulty;
   });
 }
 

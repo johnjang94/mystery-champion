@@ -5,7 +5,7 @@ import { pushState } from "@/lib/pusher";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ALLOWED = new Set(["lobby", "teams", "genre", "playing", "ended"]);
+const ALLOWED = new Set(["lobby", "genre", "difficulty", "playing", "ended"]);
 
 export async function POST(req: NextRequest) {
   try {

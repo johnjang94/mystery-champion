@@ -1,7 +1,7 @@
 {
-  "name": "Mystery Champion",
-  "short_name": "Mystery",
-  "description": "A cooperative deduction party game.",
+  "name": "The Last Crown",
+  "short_name": "Last Crown",
+  "description": "Who is ready to take the crown?",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0b10",

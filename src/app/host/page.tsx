@@ -4,8 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import QRCode from "qrcode";
 import { GENRES } from "@/lib/genres";
+import { DIFFICULTIES } from "@/lib/difficulties";
 import { derivePhase, fmt } from "@/lib/phase";
-import type { Mode, RoomState } from "@/types/game";
+import type { Difficulty, Mode, RoomState } from "@/types/game";
 import { api, getPlayerId, speakOpenAI, subscribeRoom } from "@/lib/client";
 import ParticipantsModal from "@/components/ParticipantsModal";
 
@@ -13,7 +14,7 @@ const fade = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0 },
-  transition: { duration: 0.5 },
+  transition: { duration: 0.45 },
 };
 
 type LoadStep =
@@ -24,16 +25,16 @@ type LoadStep =
 
 export default function HostPage() {
   const [room, setRoom] = useState<RoomState | null>(null);
-  const [qr, setQr] = useState<string>("");
+  const [qr, setQr] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [loadStep, setLoadStep] = useState<LoadStep>({ status: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty | null>(null);
   const [mode, setMode] = useState<Mode>("team");
   const announcedRef = useRef<Set<string>>(new Set());
-  const imgLoadedRef = useRef(false); // prevent double-triggering
+  const imgLoadedRef = useRef(false);
 
-  // Create the room on mount.
   useEffect(() => {
     (async () => {
       try {
@@ -43,7 +44,13 @@ export default function HostPage() {
           mode: "team",
         });
         setRoom(room);
-        const subs = subscribeRoom(room.code, null, playerId, { onState: setRoom });
+        setMode(room.mode);
+        const subs = subscribeRoom(room.code, null, playerId, {
+          onState: (next) => {
+            setRoom(next);
+            setMode(next.mode);
+          },
+        });
         return () => subs.unsubscribe();
       } catch (e: any) {
         setError(String(e?.message || e));
@@ -51,7 +58,12 @@ export default function HostPage() {
     })();
   }, []);
 
-  // QR
+  useEffect(() => {
+    if (!room) return;
+    setSelectedGenre(room.genre);
+    setSelectedDifficulty(room.difficulty);
+  }, [room?.genre, room?.difficulty]);
+
   useEffect(() => {
     if (!room) return;
     const url = `${location.origin}/play/${room.code}`;
@@ -62,7 +74,6 @@ export default function HostPage() {
     }).then(setQr);
   }, [room?.code]);
 
-  // Voice announcements based on derived phase
   useEffect(() => {
     if (!room) return;
     const tick = () => {
@@ -70,54 +81,48 @@ export default function HostPage() {
       const key = d.phase + ":" + d.revealedBonus + ":" + room.storedPhase + ":" + room.winner;
       if (announcedRef.current.has(key)) return;
       announcedRef.current.add(key);
-      if (room.storedPhase === "playing" && d.phase === "thinking")
-        speakOpenAI("The five minute countdown begins now.");
+      if (room.storedPhase === "playing" && d.phase === "thinking") {
+        speakOpenAI("The round begins now.");
+      }
       if (d.phase === "active") speakOpenAI("You may now ask questions and attempt answers.");
       if (d.phase === "bonus1") speakOpenAI("A new bonus keyword is now revealed.");
       if (d.phase === "bonus2") speakOpenAI("The final bonus keyword is now revealed.");
-      if (d.phase === "ended" && room.winner != null)
-        speakOpenAI("The case has been solved.");
+      if (d.phase === "ended" && room.winner != null) speakOpenAI("The round has been decided.");
     };
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
   }, [room]);
 
-  // Kick off per-photo image loading once the scenario is in KV.
   useEffect(() => {
     if (!room?.scenario || room.storedPhase !== "playing") return;
     if (imgLoadedRef.current) return;
     imgLoadedRef.current = true;
 
     const photos = room.scenario.photos;
-    const needsLoad = photos.filter((p) => !p.imageUrl);
+    const needsLoad = photos.filter((photo) => !photo.imageUrl);
     if (needsLoad.length === 0) {
       setLoadStep({ status: "ready" });
       return;
     }
 
-    let done = photos.filter((p) => p.imageUrl).length;
+    let done = photos.filter((photo) => photo.imageUrl).length;
     const total = photos.length;
     setLoadStep({ status: "images", done, total });
 
     photos.forEach((photo, idx) => {
-      if (photo.imageUrl) return; // already loaded
+      if (photo.imageUrl) return;
       api("/api/room/image", { code: room.code, photoIndex: idx })
         .then(() => {
           done += 1;
-          if (done >= total) {
-            setLoadStep({ status: "ready" });
-          } else {
-            setLoadStep({ status: "images", done, total });
-          }
+          setLoadStep(done >= total ? { status: "ready" } : { status: "images", done, total });
         })
         .catch(() => {
-          done += 1; // count failures so we don't get stuck
-          if (done >= total) setLoadStep({ status: "ready" });
-          else setLoadStep({ status: "images", done, total });
+          done += 1;
+          setLoadStep(done >= total ? { status: "ready" } : { status: "images", done, total });
         });
     });
-  }, [room?.storedPhase, room?.code]);
+  }, [room?.storedPhase, room?.code, room?.scenario]);
 
   if (!room) {
     return (
@@ -141,38 +146,41 @@ export default function HostPage() {
             qr={qr}
             mode={mode}
             onModeChange={setMode}
-            onTeams={() => api("/api/room/teams", { code: room.code, mode })}
-          />
-        )}
-
-        {room.storedPhase === "teams" && (
-          <TeamsScreen
-            key="teams"
-            room={room}
-            onContinue={() => api("/api/room/phase", { code: room.code, phase: "genre" })}
             onEdit={() => setEditOpen(true)}
+            onContinue={() => api("/api/room/teams", { code: room.code, mode })}
           />
         )}
 
         {room.storedPhase === "genre" && (
           <GenreScreen
             key="genre"
-            room={room}
             selected={selectedGenre}
-            onSelect={(g) => setSelectedGenre(g)}
-            onEdit={() => setEditOpen(true)}
+            onSelect={setSelectedGenre}
+            onContinue={() => api("/api/room/phase", { code: room.code, phase: "difficulty" })}
+          />
+        )}
+
+        {room.storedPhase === "difficulty" && (
+          <DifficultyScreen
+            key="difficulty"
+            selected={selectedDifficulty}
             loadStep={loadStep}
             error={error}
-            onContinue={async () => {
-              if (!selectedGenre) return;
+            onSelect={setSelectedDifficulty}
+            onBack={() => api("/api/room/phase", { code: room.code, phase: "genre" })}
+            onStart={async () => {
+              if (!selectedGenre || !selectedDifficulty) return;
               setError(null);
               imgLoadedRef.current = false;
               try {
-                setLoadStep({ status: "scenario", label: "Writing the case with Claude…" });
-                await api("/api/scenario", { code: room.code, genre: selectedGenre });
-                // Image loading kicks off from the useEffect below when storedPhase → "playing"
+                setLoadStep({ status: "scenario", label: "Writing the round with OpenAI…" });
+                await api("/api/scenario", {
+                  code: room.code,
+                  genre: selectedGenre,
+                  difficulty: selectedDifficulty,
+                });
               } catch (e: any) {
-                setError(String(e.message || e));
+                setError(String(e?.message || e));
                 setLoadStep({ status: "idle" });
               }
             }}
@@ -188,66 +196,69 @@ export default function HostPage() {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         room={room}
-        onRename={(id, name) =>
-          api("/api/room/rename", { code: room.code, targetId: id, name })
-        }
+        onRename={(id, name) => api("/api/room/rename", { code: room.code, targetId: id, name })}
       />
     </div>
   );
 }
-
-/* ───────────── Screens ───────────── */
 
 function LobbyScreen({
   room,
   qr,
   mode,
   onModeChange,
-  onTeams,
+  onEdit,
+  onContinue,
 }: {
   room: RoomState;
   qr: string;
   mode: Mode;
-  onModeChange: (m: Mode) => void;
-  onTeams: () => void;
+  onModeChange: (mode: Mode) => void;
+  onEdit: () => void;
+  onContinue: () => void;
 }) {
   const joinUrl = typeof window !== "undefined" ? `${location.origin}/play/${room.code}` : "";
-  const playableCount = room.players.filter((p) => !p.isHost).length;
+  const playableCount = room.players.filter((player) => !player.isHost).length;
+
   return (
-    <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20">
-      <h2 className="text-3xl text-accent font-display">Form a Team</h2>
+    <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20 pb-10">
+      <h2 className="text-3xl text-accent font-display">Game Conditions</h2>
       <p className="mt-3 text-parchment/70 text-center max-w-xl">
-        Players join from their phones. Pick a mode, then form teams.
+        Step 1: choose whether this round is solo or group play, then invite players into the room.
       </p>
 
       <div className="mt-6 flex gap-2 bg-parchment/10 rounded-full p-1 border border-parchment/15">
-        {(["team", "solo"] as const).map((m) => (
+        {(["solo", "team"] as const).map((value) => (
           <button
-            key={m}
-            onClick={() => onModeChange(m)}
+            key={value}
+            onClick={() => onModeChange(value)}
             className={
               "px-5 py-2 rounded-full text-sm transition " +
-              (mode === m ? "bg-accent text-ink" : "text-parchment/70 hover:bg-parchment/10")
+              (mode === value ? "bg-accent text-ink" : "text-parchment/70 hover:bg-parchment/10")
             }
           >
-            {m === "team" ? "Team mode" : "Solo / PvP"}
+            {value === "solo" ? "Solo" : "Group"}
           </button>
         ))}
       </div>
 
-      <div className="mt-8 grid md:grid-cols-2 gap-8 items-center">
+      <div className="mt-8 grid md:grid-cols-2 gap-8 items-start max-w-5xl w-full">
         <div className="card flex flex-col items-center">
           {qr ? <img src={qr} alt="QR" className="w-56 h-56" /> : <div className="w-56 h-56" />}
           <div className="mt-3 text-parchment/60 text-xs break-all max-w-xs text-center">{joinUrl}</div>
           <div className="mt-2 text-accent text-3xl tracking-[0.4em]">{room.code}</div>
         </div>
+
         <div className="card min-w-[260px]">
-          <div className="text-parchment/60 text-xs uppercase tracking-widest">Players</div>
-          <ul className="mt-3 space-y-1 text-parchment/90 max-h-72 overflow-auto">
-            {room.players.map((p) => (
-              <li key={p.id} className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-parchment/60 text-xs uppercase tracking-widest">Players</div>
+            <button onClick={onEdit} className="btn-pill !py-2 !px-4">Edit Participants</button>
+          </div>
+          <ul className="mt-4 space-y-1 text-parchment/90 max-h-72 overflow-auto">
+            {room.players.map((player) => (
+              <li key={player.id} className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-accent" />
-                {p.name} {p.isHost && <span className="text-accent/60 text-xs">(host)</span>}
+                {player.name} {player.isHost && <span className="text-accent/60 text-xs">(host)</span>}
               </li>
             ))}
           </ul>
@@ -255,125 +266,128 @@ function LobbyScreen({
       </div>
 
       <button
-        onClick={onTeams}
+        onClick={onContinue}
         disabled={playableCount < 1}
         className="mt-10 btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        {mode === "team" ? "Form Teams" : "Start Solo"}
-      </button>
-    </motion.section>
-  );
-}
-
-function TeamsScreen({
-  room,
-  onContinue,
-  onEdit,
-}: {
-  room: RoomState;
-  onContinue: () => void;
-  onEdit: () => void;
-}) {
-  const teamA = room.players.filter((p) => p.team === 0);
-  const teamB = room.players.filter((p) => p.team === 1);
-  return (
-    <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20">
-      <h2 className="text-3xl text-accent font-display">
-        {room.mode === "solo" ? "Solo Lineup" : "Teams Formed"}
-      </h2>
-      <button onClick={onEdit} className="absolute top-20 right-6 btn-pill">
-        Edit Participants
-      </button>
-      {room.mode === "solo" ? (
-        <ul className="mt-10 card w-full max-w-md space-y-1">
-          {room.players.filter((p) => !p.isHost).map((p) => <li key={p.id}>{p.name}</li>)}
-        </ul>
-      ) : (
-        <div className="mt-10 grid md:grid-cols-2 gap-8 max-w-3xl w-full">
-          <div className="card">
-            <div className="text-crimson text-xs uppercase tracking-widest">Team 1</div>
-            <ul className="mt-3 space-y-1">{teamA.map((p) => <li key={p.id}>{p.name}</li>)}</ul>
-          </div>
-          <div className="card">
-            <div className="text-accent text-xs uppercase tracking-widest">Team 2</div>
-            <ul className="mt-3 space-y-1">{teamB.map((p) => <li key={p.id}>{p.name}</li>)}</ul>
-          </div>
-        </div>
-      )}
-      <button onClick={onContinue} className="absolute bottom-6 right-6 btn-primary !py-3 !px-6">
-        Next
+        Continue to Game Type
       </button>
     </motion.section>
   );
 }
 
 function GenreScreen({
-  room,
   selected,
   onSelect,
-  onEdit,
   onContinue,
-  loadStep,
-  error,
 }: {
-  room: RoomState;
   selected: string | null;
-  onSelect: (g: string) => void;
-  onEdit: () => void;
+  onSelect: (genre: string) => void;
   onContinue: () => void;
-  loadStep: LoadStep;
-  error: string | null;
 }) {
-  const busy = loadStep.status === "scenario";
-
   return (
-    <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20">
-      <h2 className="text-3xl text-accent font-display">Choose a Genre</h2>
-      <button onClick={onEdit} className="absolute top-20 right-6 btn-pill">
-        Edit Participants
-      </button>
+    <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20 pb-10">
+      <h2 className="text-3xl text-accent font-display">Game Conditions</h2>
+      <p className="mt-3 text-parchment/70 text-center max-w-xl">
+        Step 2: choose the kind of game you want to play.
+      </p>
 
-      <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl w-full">
-        {GENRES.map((g) => (
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl w-full">
+        {GENRES.map((genre) => (
           <button
-            key={g.name}
-            onClick={() => !busy && onSelect(g.name)}
+            key={genre.name}
+            onClick={() => onSelect(genre.name)}
             className={
-              "card flex flex-col items-center transition " +
-              (selected === g.name ? "ring-2 ring-accent shadow-glow" : "hover:bg-parchment/10") +
-              (busy ? " opacity-50 pointer-events-none" : "")
+              "card text-left transition " +
+              (selected === genre.name ? "ring-2 ring-accent shadow-glow" : "hover:bg-parchment/10")
             }
           >
-            <div className="text-3xl">{g.emoji}</div>
-            <div className="mt-2 text-parchment/90 text-sm">{g.name}</div>
+            <div className="flex items-start gap-4">
+              <div className="text-3xl">{genre.emoji}</div>
+              <div>
+                <div className="text-parchment font-medium">{genre.name}</div>
+                <p className="mt-2 text-parchment/65 text-sm">{genre.description}</p>
+              </div>
+            </div>
           </button>
         ))}
       </div>
 
-      {error && <div className="mt-4 text-crimson text-sm">{error}</div>}
+      <button
+        onClick={onContinue}
+        disabled={!selected}
+        className="absolute bottom-6 right-6 btn-primary !py-3 !px-6 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        Continue
+      </button>
+    </motion.section>
+  );
+}
 
-      {/* Step-by-step loading indicator */}
+function DifficultyScreen({
+  selected,
+  loadStep,
+  error,
+  onSelect,
+  onBack,
+  onStart,
+}: {
+  selected: Difficulty | null;
+  loadStep: LoadStep;
+  error: string | null;
+  onSelect: (difficulty: Difficulty) => void;
+  onBack: () => void;
+  onStart: () => void;
+}) {
+  const busy = loadStep.status === "scenario" || loadStep.status === "images";
+
+  return (
+    <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20 pb-10">
+      <h2 className="text-3xl text-accent font-display">Game Conditions</h2>
+      <p className="mt-3 text-parchment/70 text-center max-w-xl">
+        Step 3: choose the difficulty level, then start the round.
+      </p>
+
+      <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl w-full">
+        {DIFFICULTIES.map((difficulty) => (
+          <button
+            key={difficulty.value}
+            onClick={() => !busy && onSelect(difficulty.value)}
+            className={
+              "card text-left transition " +
+              (selected === difficulty.value ? "ring-2 ring-accent shadow-glow" : "hover:bg-parchment/10") +
+              (busy ? " opacity-60 pointer-events-none" : "")
+            }
+          >
+            <div className="text-accent text-xs uppercase tracking-widest">{difficulty.label}</div>
+            <p className="mt-3 text-parchment/80 text-sm">{difficulty.tagline}</p>
+          </button>
+        ))}
+      </div>
+
       {loadStep.status !== "idle" && loadStep.status !== "ready" && (
         <div className="mt-6 card max-w-md w-full">
-          <PrepStep
-            done={loadStep.status !== "scenario"}
-            label="Writing the case with Claude"
-          />
+          <PrepStep done={loadStep.status !== "scenario"} label="Writing the round with OpenAI" />
           {loadStep.status === "images" && (
             <PrepStep
               done={loadStep.done >= loadStep.total}
-              label={`Generating illustrations (${loadStep.done} / ${loadStep.total})`}
+              label={`Creating the images with OpenAI (${loadStep.done} / ${loadStep.total})`}
             />
           )}
         </div>
       )}
 
+      {error && <div className="mt-4 text-crimson text-sm">{error}</div>}
+
+      <button onClick={onBack} className="absolute bottom-6 left-6 btn-pill !py-3 !px-6">
+        Back
+      </button>
       <button
-        onClick={onContinue}
+        onClick={onStart}
         disabled={!selected || busy}
         className="absolute bottom-6 right-6 btn-primary !py-3 !px-6 disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Continue
+        Start Game
       </button>
     </motion.section>
   );
@@ -400,36 +414,39 @@ function PrepStep({ done, label }: { done: boolean; label: string }) {
 }
 
 function GameScreen({ room }: { room: RoomState }) {
-  const s = room.scenario!;
+  const scenario = room.scenario!;
   const [now, setNow] = useState(Date.now());
   const [exitOpen, setExitOpen] = useState(false);
   const announcedTimerRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(t);
   }, []);
-  const d = derivePhase(room, now);
 
-  // Voice announcements for timer transitions.
+  const d = derivePhase(room, now);
+  const visibleBonus = scenario.bonusKeywords.slice(0, d.revealedBonus);
+
   useEffect(() => {
     const key = d.timer.kind + (d.timer.kind === "bonus_reveal" ? d.timer.nth : "");
     if (announcedTimerRef.current.has(key)) return;
     announcedTimerRef.current.add(key);
-    if (d.timer.kind === "next_keyword" && d.timer.nth === 1)
-      speakOpenAI("Five minutes are up. You may now ask questions and attempt answers. The next bonus keyword will be revealed in three minutes.");
-    if (d.timer.kind === "bonus_reveal" && d.timer.nth === 1)
+    if (d.timer.kind === "next_keyword" && d.timer.nth === 1) {
+      speakOpenAI("Five minutes are up. The next bonus keyword arrives in three minutes.");
+    }
+    if (d.timer.kind === "bonus_reveal" && d.timer.nth === 1) {
       speakOpenAI(`An additional keyword is now revealed: ${d.timer.keyword}.`);
-    if (d.timer.kind === "next_keyword" && d.timer.nth === 2)
+    }
+    if (d.timer.kind === "next_keyword" && d.timer.nth === 2) {
       speakOpenAI("The final bonus keyword will be revealed in three minutes.");
-    if (d.timer.kind === "bonus_reveal" && d.timer.nth === 2)
+    }
+    if (d.timer.kind === "bonus_reveal" && d.timer.nth === 2) {
       speakOpenAI(`The final keyword is now revealed: ${d.timer.keyword}.`);
-  }, [d.timer.kind, (d.timer as any).nth]);
-
-  const visibleBonus = s.bonusKeywords.slice(0, d.revealedBonus);
+    }
+  }, [d.timer]);
 
   return (
     <motion.section {...fade} className="relative min-h-screen px-4 sm:px-6 py-16 sm:py-20 pb-24">
-      {/* ── Header: scores + timer ── */}
       <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 max-w-6xl mx-auto">
         <div className="order-2 sm:order-1 flex gap-2 sm:gap-6 flex-wrap justify-center sm:justify-start">
           {room.mode === "team" ? (
@@ -438,8 +455,14 @@ function GameScreen({ room }: { room: RoomState }) {
               <ScoreBox label="Team 2" score={room.scores[1]} accent="text-accent" winner={room.winner === 1} />
             </>
           ) : (
-            room.players.filter((p) => !p.isHost).slice(0, 6).map((p) => (
-              <ScoreBox key={p.id} label={p.name} score={p.score} accent="text-accent" winner={room.winner === p.id} />
+            room.players.filter((player) => !player.isHost).slice(0, 6).map((player) => (
+              <ScoreBox
+                key={player.id}
+                label={player.name}
+                score={player.score}
+                accent="text-accent"
+                winner={room.winner === player.id}
+              />
             ))
           )}
         </div>
@@ -448,50 +471,126 @@ function GameScreen({ room }: { room: RoomState }) {
         </div>
       </header>
 
-      {/* ── Case briefing ── */}
-      <section className="mt-6 sm:mt-10 max-w-3xl mx-auto card">
-        <div className="text-accent text-xs uppercase tracking-widest">Case Briefing</div>
-        <p className="mt-2 text-parchment/90 italic">{s.briefing}</p>
-        <p className="mt-3 text-parchment/80">
-          <span className="text-parchment/50 text-xs uppercase tracking-widest mr-2">Question</span>
-          {s.question}
-        </p>
+      <section className="mt-6 sm:mt-10 max-w-5xl mx-auto grid lg:grid-cols-[1.4fr_0.9fr] gap-4">
+        <div className="card">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1 rounded-full bg-accent text-ink text-xs uppercase tracking-widest">
+              {room.genre}
+            </span>
+            {room.difficulty && (
+              <span className="px-3 py-1 rounded-full border border-accent/35 text-accent text-xs uppercase tracking-widest">
+                {room.difficulty}
+              </span>
+            )}
+          </div>
+          <div className="mt-4 text-accent text-xs uppercase tracking-widest">Passage</div>
+          <p className="mt-2 text-parchment/90 italic">{scenario.briefing}</p>
+          <p className="mt-3 text-parchment/80">
+            <span className="text-parchment/50 text-xs uppercase tracking-widest mr-2">Question</span>
+            {scenario.question}
+          </p>
+        </div>
+
+        <div className="card">
+          <div className="text-accent text-xs uppercase tracking-widest">Round Notes</div>
+          <ul className="mt-3 space-y-2 text-sm text-parchment/80">
+            <li>All passages and images for this round are generated by the OpenAI API.</li>
+            <li>Whoever has more points wins the game.</li>
+            <li>Ask a question if you want a hint, but it costs 1 point.</li>
+          </ul>
+        </div>
       </section>
 
-      {/* ── Photos ── */}
-      <section className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
-        {s.photos.map((p, i) => (
-          <div key={i} className="card flex flex-col items-center">
-            <div className="w-full aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-parchment/15 to-parchment/5 border border-parchment/15 relative">
-              {p.imageUrl ? (
-                <motion.img src={p.imageUrl} alt={p.keyword} className="w-full h-full object-cover"
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} />
+      {room.genre === "Visual Match" ? (
+        <section className="mt-6 grid lg:grid-cols-2 gap-4 max-w-5xl mx-auto">
+          <div className="card">
+            <div className="text-accent text-xs uppercase tracking-widest">3D View</div>
+            <div className="mt-3 w-full aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-parchment/15 to-parchment/5 border border-parchment/15 relative">
+              {scenario.photos[0]?.imageUrl ? (
+                <motion.img
+                  src={scenario.photos[0].imageUrl || ""}
+                  alt={scenario.photos[0].keyword}
+                  className="w-full h-full object-cover"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.6 }}
+                />
               ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                  <svg className="w-7 h-7 animate-spin text-accent/60" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-                  </svg>
-                  <span className="text-parchment/40 text-[10px] text-center px-2">Generating illustration…</span>
-                </div>
+                <LoadingArt />
               )}
             </div>
-            <div className="mt-2 text-accent text-sm">{p.keyword}</div>
           </div>
-        ))}
+          <div className="card">
+            <div className="text-accent text-xs uppercase tracking-widest">2D Maze</div>
+            <div className="mt-3">
+              <MazeBoard seed={scenario.solutionKeywords.join("-")} />
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
+          {scenario.photos.map((photo, index) => (
+            <div key={index} className="card flex flex-col items-center">
+              <div className="w-full aspect-square rounded-lg overflow-hidden bg-gradient-to-br from-parchment/15 to-parchment/5 border border-parchment/15 relative">
+                {photo.imageUrl ? (
+                  <motion.img
+                    src={photo.imageUrl}
+                    alt={photo.keyword}
+                    className="w-full h-full object-cover"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.6 }}
+                  />
+                ) : (
+                  <LoadingArt />
+                )}
+              </div>
+              <div className="mt-2 text-accent text-sm">{photo.keyword}</div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      <section className="mt-6 max-w-5xl mx-auto grid lg:grid-cols-[1.2fr_0.8fr] gap-4">
+        <div className="card">
+          <div className="text-accent text-xs uppercase tracking-widest">Clue Keywords</div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {scenario.photos.map((photo) => (
+              <span key={photo.keyword} className="px-3 py-1 rounded-full bg-accent/15 border border-accent/40 text-accent text-xs">
+                {photo.keyword}
+              </span>
+            ))}
+            {visibleBonus.map((keyword) => (
+              <span key={keyword} className="px-3 py-1 rounded-full bg-crimson/20 border border-crimson text-parchment text-xs">
+                {keyword} ★
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {scenario.choices?.length ? (
+          <div className="card">
+            <div className="text-accent text-xs uppercase tracking-widest">Possible Answers</div>
+            <ul className="mt-3 space-y-2 text-sm text-parchment/80">
+              {scenario.choices.map((choice) => (
+                <li key={choice} className="rounded-lg border border-parchment/10 px-3 py-2 bg-parchment/5">
+                  {choice}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
-      {/* ── Activity log ── */}
       <section className="mt-6 max-w-5xl mx-auto card max-h-48 overflow-auto">
         <div className="text-accent text-xs uppercase tracking-widest">Activity</div>
         <ul className="mt-2 space-y-1 text-parchment/70 text-sm">
-          {room.activity.map((a) => (
-            <li key={a.id}>• {a.text}</li>
+          {room.activity.map((activity) => (
+            <li key={activity.id}>• {activity.text}</li>
           ))}
         </ul>
       </section>
 
-      {/* ── Bonus keyword banner (bottom) ── */}
       <AnimatePresence>
         {visibleBonus.length > 0 && (
           <motion.section
@@ -511,15 +610,15 @@ function GameScreen({ room }: { room: RoomState }) {
                   : "Bonus keywords"}
               </span>
               <div className="flex gap-3 flex-wrap">
-                {visibleBonus.map((k, i) => (
+                {visibleBonus.map((keyword, index) => (
                   <motion.span
-                    key={k}
+                    key={keyword}
                     initial={{ scale: 0.7, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: i * 0.15, type: "spring", stiffness: 300 }}
+                    transition={{ delay: index * 0.15, type: "spring", stiffness: 300 }}
                     className="px-4 py-1.5 rounded-full bg-accent text-ink font-semibold text-sm shadow-glow"
                   >
-                    {k}
+                    {keyword}
                   </motion.span>
                 ))}
               </div>
@@ -528,7 +627,7 @@ function GameScreen({ room }: { room: RoomState }) {
         )}
       </AnimatePresence>
 
-      {room.storedPhase === "ended" && <EndModal room={room} solution={s.solutionAnswer} />}
+      {room.storedPhase === "ended" && <EndModal room={room} solution={scenario.solutionAnswer} />}
 
       {d.hiddenButtonShown && room.storedPhase !== "ended" && (
         <button
@@ -548,6 +647,52 @@ function GameScreen({ room }: { room: RoomState }) {
 
       <ExitGameModal open={exitOpen} onClose={() => setExitOpen(false)} />
     </motion.section>
+  );
+}
+
+function LoadingArt() {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+      <svg className="w-7 h-7 animate-spin text-accent/60" viewBox="0 0 24 24" fill="none">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      </svg>
+      <span className="text-parchment/40 text-[10px] text-center px-2">Creating image…</span>
+    </div>
+  );
+}
+
+function MazeBoard({ seed }: { seed: string }) {
+  const letters = ["A", "B", "C", "D", "E", "F"];
+  const cells = Array.from({ length: 36 }, (_, index) => {
+    const code = seed.charCodeAt(index % seed.length) || 0;
+    return (code + index) % 4 === 0;
+  });
+
+  return (
+    <div className="grid grid-cols-[28px_repeat(6,minmax(0,1fr))] gap-1 text-center text-xs text-parchment/80">
+      <div />
+      {letters.map((letter) => (
+        <div key={letter} className="text-accent/80 uppercase">{letter}</div>
+      ))}
+      {Array.from({ length: 6 }, (_, row) => (
+        <div key={row} className="contents">
+          <div className="flex items-center justify-center text-accent/80">{row + 1}</div>
+          {Array.from({ length: 6 }, (_, col) => {
+            const active = cells[row * 6 + col];
+            return (
+              <div
+                key={`${row}-${col}`}
+                className={
+                  "aspect-square rounded border border-parchment/10 " +
+                  (active ? "bg-accent/25 shadow-glow" : "bg-parchment/5")
+                }
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -580,9 +725,7 @@ function TimerWidget({ timer }: { timer: ReturnType<typeof derivePhase>["timer"]
   if (timer.kind === "next_keyword") {
     return (
       <div className="text-center">
-        <div className="text-parchment/60 text-xs uppercase tracking-widest">
-          Next keyword in
-        </div>
+        <div className="text-parchment/60 text-xs uppercase tracking-widest">Next keyword in</div>
         <div className={`${baseNum} text-parchment`}>{fmt(timer.remainingMs)}</div>
       </div>
     );
@@ -597,7 +740,6 @@ function TimerWidget({ timer }: { timer: ReturnType<typeof derivePhase>["timer"]
       </div>
     );
   }
-  // open
   return (
     <div className="text-center">
       <div className="text-parchment/40 text-xs uppercase tracking-widest">Time</div>
@@ -630,8 +772,8 @@ function EndModal({ room, solution }: { room: RoomState; solution: string }) {
   if (room.winner != null) {
     if (typeof room.winner === "number") title = `Team ${room.winner + 1} wins!`;
     else {
-      const p = room.players.find((p) => p.id === room.winner);
-      title = p ? `${p.name} wins!` : "Winner";
+      const player = room.players.find((entry) => entry.id === room.winner);
+      title = player ? `${player.name} wins!` : "Winner";
     }
   }
   return (

@@ -5,12 +5,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ALLOWED = [
-  "ANTHROPIC_API_KEY",
-  "ANTHROPIC_MODEL",
   "OPENAI_API_KEY",
+  "OPENAI_TEXT_MODEL",
+  "OPENAI_IMAGE_MODEL",
   "OPENAI_TTS_MODEL",
   "OPENAI_TTS_VOICE",
-  "UNSPLASH_ACCESS_KEY",
 ];
 
 function mask(v: string) {

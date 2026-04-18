@@ -1,4 +1,5 @@
 export type Mode = "team" | "solo";
+export type Difficulty = "easy" | "medium" | "hard" | "challenger";
 
 export type Player = {
   id: string;
@@ -21,17 +22,18 @@ export type Scenario = {
   bonusKeywords: string[]; // 2
   solutionKeywords: string[]; // 6 (4 photo + 2 bonus)
   solutionAnswer: string;
+  choices?: string[] | null;
 };
 
 // Persistent phase stored in KV. Sub-phases (thinking/active/bonus1/bonus2)
 // are *derived* from startedAt by `derivePhase()`.
-export type StoredPhase = "lobby" | "teams" | "genre" | "playing" | "ended";
+export type StoredPhase = "lobby" | "genre" | "difficulty" | "playing" | "ended";
 
 // Derived phase used by the UI.
 export type Phase =
   | "lobby"
-  | "teams"
   | "genre"
+  | "difficulty"
   | "thinking"
   | "active"
   | "bonus1"
@@ -47,6 +49,7 @@ export type RoomState = {
   players: Player[];
   storedPhase: StoredPhase;
   genre: string | null;
+  difficulty: Difficulty | null;
   scenario: Scenario | null;
   scores: [number, number]; // team scores
   activity: ActivityEntry[];

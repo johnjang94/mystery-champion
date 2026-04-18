@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchUnsplashImage } from "@/lib/unsplash";
+import { generateGameImage } from "@/lib/openai";
 import { getRoom, updatePhotoImage } from "@/lib/rooms";
 import { pushState } from "@/lib/pusher";
 
@@ -27,9 +27,7 @@ export async function POST(req: NextRequest) {
     if (photo.imageUrl)
       return NextResponse.json({ imageUrl: photo.imageUrl });
 
-    const imageUrl = await fetchUnsplashImage(photo.keyword);
-    if (!imageUrl)
-      return NextResponse.json({ error: "No Unsplash result for keyword" }, { status: 502 });
+    const imageUrl = await generateGameImage(photo.prompt || photo.keyword);
 
     const updated = await updatePhotoImage(upper, idx, imageUrl);
     if (updated) await pushState(upper, updated);

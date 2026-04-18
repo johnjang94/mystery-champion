@@ -2,10 +2,10 @@ import "./globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "Mystery Champion",
-  description: "Are you the mystery champion?",
+  title: "The Last Crown",
+  description: "Who is ready to take the crown?",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Mystery Champion" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "The Last Crown" },
   icons: {
     icon: [
       { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
