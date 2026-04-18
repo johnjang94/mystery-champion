@@ -43,9 +43,16 @@ export default function PlayPage() {
   }, []);
 
   // Pre-fetch the current room state so the player can see who's there.
+  // Also auto-rejoin if this player's ID is already in the room (e.g. after
+  // accidentally navigating away mid-game).
   useEffect(() => {
     apiGet<{ room: RoomState }>(`/api/room/${code}`)
-      .then((r) => setRoom(r.room))
+      .then((r) => {
+        setRoom(r.room);
+        const playerId = getPlayerId();
+        const alreadyIn = r.room.players.some((p) => p.id === playerId);
+        if (alreadyIn) setJoined(true);
+      })
       .catch(() => {});
   }, [code]);
 
@@ -334,10 +341,10 @@ export default function PlayPage() {
             <div className="fixed inset-0 bg-ink/80 backdrop-blur flex items-center justify-center z-[60]">
               <div className="card max-w-sm w-[90%] text-center">
                 <div className="text-accent text-xs uppercase tracking-widest">Exit game</div>
-                <p className="mt-3 text-parchment/90">Are you sure you want to exit the game?</p>
+                <p className="mt-3 text-parchment/90">Are you sure you want to leave the game?</p>
                 <div className="mt-6 flex gap-3 justify-center">
-                  <button onClick={() => setExitOpen(false)} className="btn-pill">No</button>
-                  <Link href="/" className="btn-primary !py-2 !px-4">Yes</Link>
+                  <button onClick={() => setExitOpen(false)} className="btn-pill">Stay</button>
+                  <Link href="/" className="btn-primary !py-2 !px-4">Leave the Game</Link>
                 </div>
               </div>
             </div>

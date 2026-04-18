@@ -219,12 +219,15 @@ function LobbyScreen({
 }) {
   const joinUrl = typeof window !== "undefined" ? `${location.origin}/play/${room.code}` : "";
   const playableCount = room.players.filter((player) => !player.isHost).length;
+  const isSolo = mode === "solo";
 
   return (
     <motion.section {...fade} className="relative min-h-screen flex flex-col items-center px-6 pt-20 pb-10">
       <h2 className="text-3xl text-accent font-display">Game Conditions</h2>
       <p className="mt-3 text-parchment/70 text-center max-w-xl">
-        Step 1: choose whether this round is solo or group play, then invite players into the room.
+        {isSolo
+          ? "Step 1: solo mode selected — no other players needed. Continue to choose the game type."
+          : "Step 1: choose whether this round is solo or group play, then invite players into the room."}
       </p>
 
       <div className="mt-6 flex gap-2 bg-parchment/10 rounded-full p-1 border border-parchment/15">
@@ -242,17 +245,19 @@ function LobbyScreen({
         ))}
       </div>
 
-      <div className="mt-8 grid md:grid-cols-2 gap-8 items-start max-w-5xl w-full">
-        <div className="card flex flex-col items-center">
-          {qr ? <img src={qr} alt="QR" className="w-56 h-56" /> : <div className="w-56 h-56" />}
-          <div className="mt-3 text-parchment/60 text-xs break-all max-w-xs text-center">{joinUrl}</div>
-          <div className="mt-2 text-accent text-3xl tracking-[0.4em]">{room.code}</div>
-        </div>
+      <div className={`mt-8 gap-8 items-start max-w-5xl w-full ${isSolo ? "flex justify-center" : "grid md:grid-cols-2"}`}>
+        {!isSolo && (
+          <div className="card flex flex-col items-center">
+            {qr ? <img src={qr} alt="QR" className="w-56 h-56" /> : <div className="w-56 h-56" />}
+            <div className="mt-3 text-parchment/60 text-xs break-all max-w-xs text-center">{joinUrl}</div>
+            <div className="mt-2 text-accent text-3xl tracking-[0.4em]">{room.code}</div>
+          </div>
+        )}
 
         <div className="card min-w-[260px]">
           <div className="flex items-center justify-between gap-3">
             <div className="text-parchment/60 text-xs uppercase tracking-widest">Players</div>
-            <button onClick={onEdit} className="btn-pill !py-2 !px-4">Edit Participants</button>
+            {!isSolo && <button onClick={onEdit} className="btn-pill !py-2 !px-4">Edit Participants</button>}
           </div>
           <ul className="mt-4 space-y-1 text-parchment/90 max-h-72 overflow-auto">
             {room.players.map((player) => (
@@ -267,7 +272,7 @@ function LobbyScreen({
 
       <button
         onClick={onContinue}
-        disabled={playableCount < 1}
+        disabled={!isSolo && playableCount < 1}
         className="mt-10 btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Continue to Game Type
@@ -702,10 +707,10 @@ function ExitGameModal({ open, onClose }: { open: boolean; onClose: () => void }
     <div className="fixed inset-0 bg-ink/80 backdrop-blur flex items-center justify-center z-[60]">
       <div className="card max-w-sm w-[90%] text-center">
         <div className="text-accent text-xs uppercase tracking-widest">Exit game</div>
-        <p className="mt-3 text-parchment/90">Are you sure you want to exit the game?</p>
+        <p className="mt-3 text-parchment/90">Are you sure you want to leave the game?</p>
         <div className="mt-6 flex gap-3 justify-center">
-          <button onClick={onClose} className="btn-pill">No</button>
-          <Link href="/" className="btn-primary !py-2 !px-4">Yes</Link>
+          <button onClick={onClose} className="btn-pill">Stay</button>
+          <Link href="/" className="btn-primary !py-2 !px-4">Leave the Game</Link>
         </div>
       </div>
     </div>
